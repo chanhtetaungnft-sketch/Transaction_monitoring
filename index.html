@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MMQR Txn Monitoring </title>
+
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #fff; /* white background */
+    padding: 30px;
+    color: #000; /* font black */
+}
+
+/* Title */
+h1 {
+    text-align: center;
+    color: #000;
+    font-size: 32px;
+}
+
+/* Search */
+#searchBox {
+    display: block;
+    margin: 25px auto;
+    padding: 15px;
+    width: 420px;
+    border-radius: 15px;
+    border: 1px solid #ccc;
+    font-size: 16px;
+    outline: none;
+    color: #000; /* input text black */
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Merchant Card */
+.merchant-card {
+    background: rgba(0,0,0,0.05);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 20px;
+    color: #000; /* text black */
+}
+
+/* KPI Cards */
+.kpi-container {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.kpi {
+    flex: 1;
+    min-width: 150px;
+    padding: 20px;
+    border-radius: 18px;
+    background: rgba(0,0,0,0.05);
+    backdrop-filter: blur(12px);
+    text-align: center;
+    color: #000; /* text black */
+    transition: 0.3s;
+}
+
+.kpi:hover {
+    transform: scale(1.05);
+}
+
+.kpi h2 {
+    margin: 10px 0;
+}
+
+/* Grid */
+.txn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+/* Cards */
+.card {
+    background: rgba(0,0,0,0.05);
+    backdrop-filter: blur(15px);
+    border-radius: 20px;
+    padding: 20px;
+    color: #000; /* text black */
+    transition: 0.3s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 8px;
+    font-size: 14px;
+    color: #000; /* table text black */
+}
+
+th {
+    text-align: left;
+    opacity: 0.9;
+}
+
+tr:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+/* Fade */
+.fade-in {
+    animation: fade 0.5s ease-in-out;
+}
+
+@keyframes fade {
+    from {opacity:0; transform:translateY(10px);}
+    to {opacity:1; transform:translateY(0);}
+}
+</style>
+</head>
+
+<body>
+
+<h1> MMQR Txn Monitoring </h1>
+
+<input type="text" id="searchBox" placeholder="🔍 Search MID or Merchant Name">
+
+<div id="merchantInfo"></div>
+<div id="kpi"></div>
+<div class="txn-grid" id="txnData"></div>
+
+<script>
+let sheetData = [];
+
+const API_URL = "https://script.google.com/macros/s/AKfycbzj8TZKqz9lKf93nHNmAqQt1tBCwB2elzVqn3aatM_M7l6Y3KoSMiEBZ8zk40yuj8nW/exec";
+
+fetch(API_URL)
+.then(res => res.json())
+.then(data => sheetData = data);
+
+// format number
+function formatNumber(num){
+    return Number(num || 0).toLocaleString();
+}
+
+document.getElementById("searchBox").addEventListener("keyup", function(){
+    const keyword = this.value.trim().toLowerCase();
+
+    const merchantDiv = document.getElementById("merchantInfo");
+    const txnDiv = document.getElementById("txnData");
+    const kpiDiv = document.getElementById("kpi");
+
+    merchantDiv.innerHTML = "";
+    txnDiv.innerHTML = "";
+    kpiDiv.innerHTML = "";
+
+    if(!keyword) return;
+
+    sheetData.forEach(item => {
+        const MID = (item["MID"] || "").toLowerCase();
+        const name = (item["Merchant Name"] || "").toLowerCase();
+
+        if(MID === keyword || name === keyword){
+
+            // Merchant Info
+            merchantDiv.innerHTML = `
+<div class="merchant-card fade-in">
+    <h2>${item["Merchant Name"]}</h2>
+    <p>MID: ${item["MID"]}</p>
+    <p>Status: ${item["Portal Status"]}</p>
+    <p>MDR: ${(Number(item["MDR Offus"] || 0) * 100).toFixed(2)}%</p>
+</div>`;
+
+            // KPI Calculation
+            let totalCount = 0;
+            let totalVol = 0;
+
+            Object.keys(item).forEach(key=>{
+                if(key.includes("Count")) totalCount += Number(item[key] || 0);
+                if(key.includes("Vol")) totalVol += Number(item[key] || 0);
+            });
+
+            kpiDiv.innerHTML = `
+            <div class="kpi-container fade-in">
+                <div class="kpi">
+                    <p>Total Txn Count</p>
+                    <h2>${formatNumber(totalCount)}</h2>
+                </div>
+                <div class="kpi">
+                    <p>Total Volume</p>
+                    <h2>${formatNumber(totalVol)}</h2>
+                </div>
+            </div>`;
+
+            // Table Builder Function
+            function buildTable(title, months){
+                let rows = months.map(m => `
+                    <tr>
+                        <td>${m}</td>
+                        <td>${formatNumber(item[m+" Count"])}</td>
+                        <td>${formatNumber(item[m+" Vol"])}</td>
+                    </tr>`).join("");
+
+                return `
+                <div class="card fade-in">
+                    <h3>${title}</h3>
+                    <table>
+                        <tr><th>Month</th><th>Count</th><th>Volume</th></tr>
+                        ${rows}
+                    </table>
+                </div>`;
+            }
+
+            let txn2025 = buildTable("2025 Txn", ["March","April","May","Jun","July","Aug","Sept","Oct","Nov","Dec"]);
+            let txn2026 = buildTable("2026 Txn", ["Jan","Feb","March 26"]);
+
+            txnDiv.innerHTML = txn2025 + txn2026;
+        }
+    });
+});
+</script>
+
+</body>
+</html>
